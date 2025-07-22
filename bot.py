@@ -37,10 +37,6 @@ BASE_SYSTEM_PROMPT = (
 )
 
 
-async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "Вітаю тебе, юний шукачу.\nЗапитай — і, можливо, я подарую тобі ниточку мудрості. ✨"
-    )
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = update.message
