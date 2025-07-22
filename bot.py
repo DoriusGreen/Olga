@@ -12,14 +12,16 @@ from telegram.ext import (
 )
 
 # ------------------------------
-# Змінні середовища
+# Завантаження змінних середовища
 # ------------------------------
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-WEBHOOK_URL = os.getenv("WEBHOOK_URL")
-ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
-VOICE_ID = "pNiaJ7NOaoIWnRJo2dZt"
+OPENAI_API_KEY       = os.getenv("OPENAI_API_KEY")
+WEBHOOK_URL          = os.getenv("WEBHOOK_URL")
+ELEVENLABS_API_KEY   = os.getenv("ELEVENLABS_API_KEY")
+VOICE_ID             = "pNiaJ7NOaoIWnRJo2dZt"
 
+# ------------------------------
+# Налаштування логування
 # ------------------------------
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -28,7 +30,9 @@ logging.basicConfig(
 
 openai.api_key = OPENAI_API_KEY
 
-# Промт Ольги
+# ------------------------------
+# Системний промт для стилю Олі
+# ------------------------------
 BASE_SYSTEM_PROMPT = (
     "Ти — Оля, 27 років, працівниця антикорупційного суду в Києві. "
     "Ти народилась 24 липня, 1998 року в смт Криве Озеро. "
@@ -39,37 +43,51 @@ BASE_SYSTEM_PROMPT = (
     "Іноді у відповідному контексті можеш рідко вживати «блять» або «піздєц». "
 )
 
+# ------------------------------
+# Обробник вхідних повідомлень
+# ------------------------------
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = update.message
     if not message:
         return
 
-    # визначаємо, чи в приваті, чи є згадка/реплай
+    # --------------------------
+    # 1) Визначаємо, чи в особистому чаті
+    # --------------------------
     is_private = message.chat.type == "private"
     should_respond = is_private
 
+    # --------------------------
+    # 2) Якщо не особистий чат — перевіряємо цитату або тег
+    # --------------------------
     if not is_private:
+        # відповідає, якщо хтось відповів на повідомлення бота
         if message.reply_to_message and message.reply_to_message.from_user.id == context.bot.id:
             should_respond = True
+        # відповідає, якщо в тексті є @бот
         elif message.entities:
             for entity in message.entities:
                 if entity.type == MessageEntity.MENTION:
-                    text_mention = message.text[entity.offset:entity.offset + entity.length]
-                    if f"@{context.bot.username}".lower() in text_mention.lower():
+                    mention = message.text[entity.offset:entity.offset + entity.length]
+                    if f"@{context.bot.username}".lower() in mention.lower():
                         should_respond = True
                         break
 
     if not should_respond:
         return
 
+    # --------------------------
+    # 3) Підготовка повідомлення для GPT
+    # --------------------------
     user_text = message.text.replace(f"@{context.bot.username}", "").strip()
-
     messages = [
         {"role": "system", "content": BASE_SYSTEM_PROMPT},
         {"role": "user",   "content": user_text},
     ]
 
-    # Генеруємо відповідь GPT
+    # --------------------------
+    # 4) Виклик OpenAI для генерації відповіді
+    # --------------------------
     try:
         resp = openai.ChatCompletion.create(
             model="gpt-4o",
@@ -83,7 +101,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logging.error(f"OpenAI API Error: {e}")
         bot_reply = "Ой, щось пішло не так із GPT. Спробуй ще раз."
 
-    # Спроба озвучки ElevenLabs
+    # --------------------------
+    # 5) Спроба озвучити відповідь через ElevenLabs
+    # --------------------------
     try:
         tts_resp = requests.post(
             f"https://api.elevenlabs.io/v1/text-to-speech/{VOICE_ID}",
@@ -105,6 +125,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
         if tts_resp.status_code == 200:
+            # надсилаємо голосове повідомлення
             with open("voice.mp3", "wb") as f:
                 f.write(tts_resp.content)
             with open("voice.mp3", "rb") as f:
@@ -117,21 +138,24 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logging.error(f"TTS Generation Error: {e}")
         await message.reply_text(bot_reply)
 
-
+# ------------------------------
+# Старт та запуск бота
+# ------------------------------
 def main():
+    # Ініціалізація Telegram-додатку
     application = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
 
-    # Тільки один єдиний handler для тексту
+    # Додаємо обробник тільки для текстових повідомлень (без команд)
     application.add_handler(
         MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message)
     )
 
-    # Запуск вебхука
+    # Запускаємо вебхук на вказаному порту і URL
     PORT = int(os.getenv("PORT", "8443"))
     application.run_webhook(
         listen="0.0.0.0",
         port=PORT,
-        url_path="",         # або свій шлях
+        url_path="",         # тут можна вказати свій шлях
         webhook_url=WEBHOOK_URL
     )
 
