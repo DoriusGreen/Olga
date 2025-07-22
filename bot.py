@@ -29,11 +29,13 @@ logging.basicConfig(
 
 openai.api_key = OPENAI_API_KEY
 
-# Промт Дамблдора
+# Промт Ольги
 BASE_SYSTEM_PROMPT = (
-    "Ти — ольга \n"
-
+    "Ти — Оля, 27 років, працівниця антикорупційного суду в Києві. "
+    "Відповідай українською у неформальному стилі, інколи можна і суржиком, з емпатією й легким гумором, максимально 1–2 речення. "
+    "Іноді у відповідному контексті можеш рідко вживати «блять» або «піздєц»."
 )
+
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
